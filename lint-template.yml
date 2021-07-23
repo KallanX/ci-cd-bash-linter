@@ -1,0 +1,26 @@
+.ci:stage:lint:prisma:
+    image: 
+      name: $<IMAGE_NAME>
+      entrypoint: [""]
+    stage: lint
+    before_script:
+        - jq --version
+        - shellcheck --version
+        - mkdir shellcheck-snippets
+    script:
+        - arr=($CI_PROJECT_DIR/rulesets/*)
+        - >
+            for file in "${arr[@]}"; do
+                checkNAME=$(jq --raw-output '.[] .name' $file | sed -e 's/ /_/g')
+                jq --raw-output '.[] .script' $file > $CI_PROJECT_DIR/shellcheck-snippets/$checkNAME.sh
+            done
+        - shellcheck --severity=error --shell=bash -f json $CI_PROJECT_DIR/shellcheck-snippets/*.sh >> $CI_PROJECT_DIR/raw-data.json
+    allow_failure: true
+    after_script:
+        - RawDataContent=$(grep -m1 "" $CI_PROJECT_DIR/raw-data.json)
+        - if [ $RawDataContent == "[]" ]; then echo "Rulesets pass ShellCheck linting."; else echo "Rulesets have failed ShellCheck linting. Please check results.json artifact." exit 1; fi
+        - jq . $CI_PROJECT_DIR/raw-data.json >> $CI_PROJECT_DIR/results.json
+    artifacts:
+        when: always
+        paths:
+            - $CI_PROJECT_DIR/results.json
